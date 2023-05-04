@@ -1,0 +1,48 @@
+Gabung Free harddisk linux 2TB
+$ sudo fdisk -l
+$ sudo pvdisplay -s
+   Device "/dev/sda3" has a capacity of 1.90 TiB
+$ sudo vgdisplay -s
+  "ubuntu-vg" <2.00 TiB [100.00 GiB used / 1.90 TiB free]
+$ sudo lvdisplay | grep Name
+  LV Name                ubuntu-lv
+  VG Name                ubuntu-vg
+$ sudo lvs
+  LV        VG        Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  ubuntu-lv ubuntu-vg -wi-ao---- 100.00g
+
+Fixed:
+$ df -h
+Filesystem                         Size  Used Avail Use% Mounted on
+tmpfs                              1.6G  1.5M  1.6G   1% /run
+/dev/mapper/ubuntu--vg-ubuntu--lv   98G  9.4G   84G  11% /
+
+$ sudo -i
+# lvextend -l +100%FREE /dev/mapper/ubuntu--vg-ubuntu--lv
+  Size of logical volume ubuntu-vg/ubuntu-lv changed from 100.00 GiB (25600 extents) to <2.00 TiB (523775 extents).
+  Logical volume ubuntu-vg/ubuntu-lv successfully resized.
+  ==> /dev/mapper/ubuntu--vg-ubuntu--lv 102626232  9793196   87573772  11% /
+
+# lvresize --extents +100%FREE -r /dev/mapper/ubuntu--vg-ubuntu--lv
+  Size of logical volume ubuntu-vg/ubuntu-lv unchanged from <2.00 TiB (523775 extents).
+  Logical volume ubuntu-vg/ubuntu-lv successfully resized.
+resize2fs 1.46.5 (30-Dec-2021)
+Filesystem at /dev/mapper/ubuntu--vg-ubuntu--lv is mounted on /; on-line resizing required
+old_desc_blocks = 13, new_desc_blocks = 256
+The filesystem on /dev/mapper/ubuntu--vg-ubuntu--lv is now 536345600 (4k) blocks long.
+
+old ==> /dev/mapper/ubuntu--vg-ubuntu--lv 102626232  9793196   87573772  11% /
+new ==> /dev/mapper/ubuntu--vg-ubuntu--lv 2111122464 9793464 2014429796   1% /
+
+# parted
+(parted) print free
+Number  Start   End     Size    File system  Name  Flags
+        17.4kB  1049kB  1031kB  Free Space
+ 1      1049kB  2097kB  1049kB                     bios_grub
+ 2      2097kB  2150MB  2147MB  ext4
+ 3      2150MB  2199GB  2197GB
+        2199GB  2199GB  1032kB  Free Space
+
+(parted)
+
+   # swapoff -a
