@@ -1,0 +1,14 @@
+Reff : https://teknocerdas.com/serba-serbi/mengakses-localhost-dari-internet-dengan-ssh-tunneling/
+## Mengakses localhost dari Internet dengan SSH Tunneling
+1. Pastikan Firewall Terbuka (Server)
+   $ sudo ufw allow 8080/tcp
+2. Modifikasi Konfigurasi SSH Daemon (Server)
+   $ sudo vi /etc/ssh/sshd_config
+   GatewayPorts yes
+   $ sudo systemctl reload ssh
+3. Menyalakan Web Server (Lokal)
+   $ python3 -m http.server --bind 127.0.0.1 --directory /tmp/webserver 9090
+4. Membuat SSH Tunnel (Lokal)
+   $ ssh -R 0.0.0.0:8080:127.0.0.1:9090 -C -N user@server-ip
+5. Tes Koneksi Tunnel
+   $ ss -lnt4
