@@ -15,6 +15,32 @@ Router Anda terhubung ke jaringan melalui GigabitEthernet8 dengan IP 192.168.30.
    PENTING: Jika IP 192.168.30.100 berasal dari router lain (seperti modem provider), 
             Anda harus melakukan Port Forwarding (UDP 500 & 4500) dari modem tersebut ke arah IP Cisco ini agar FortiClient dari luar bisa masuk.
 
+
+### A. Membuat Virtual Template
+interface Virtual-Template1 type tunnel
+ ip unnumbered GigabitEthernet8
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet8
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FORTI-VTI-PROFILE
+
+conf t
+! --- 1. Pastikan IPsec Profile memanggil IKEv2 Profile ---
+crypto ipsec profile FORTI-VTI-PROFILE
+ set ikev2-profile FORTI-PROFILE
+exit
+
+! --- 2. Pasang di Pintu Virtual ---
+interface Virtual-Template1 type tunnel
+ ip unnumbered GigabitEthernet8
+ tunnel source GigabitEthernet8
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FORTI-VTI-PROFILE
+exit
+
+
+
 # Ini akan otomatis mengaktifkan ISAKMP/IKEv2 status menjadi ON
 configure terminal
 crypto ikev2 proposal PROPOSAL_FORTI
@@ -154,3 +180,88 @@ exit
 access-list 101 permit ip 192.168.70.0 0.0.0.255 any
 crypto ikev2 authorization policy FORTI-POLICY
  route set access-list 101
+
+
+
+#### LANGKAH URUTAN untuk koneksi VPN IKEv2 dari FortiClient
+Langkah 1: Persiapan Jaringan & NAT-Exemption
+Agar trafik internal tidak terganggu oleh proses NAT internet.
+! --- ACL untuk memisahkan trafik internet dan VPN ---
+ip access-list extended NAT-EXEMPT
+ deny ip 192.168.70.0 0.0.0.255 192.168.80.0 0.0.0.255
+ permit ip 192.168.70.0 0.0.0.255 any
+exit
+
+! --- Terapkan NAT pada interface luar ---
+no ip nat inside source list 1 interface GigabitEthernet8 overload
+ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
+
+Langkah 2: Konfigurasi IKEv2 (Fase 1)
+Menentukan metode enkripsi dan autentikasi untuk membangun "terowongan".
+! --- 1. Proposal Enkripsi ---
+crypto ikev2 proposal FORTI-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+exit
+
+! --- 2. Policy IKEv2 ---
+crypto ikev2 policy FORTI-POL
+ proposal FORTI-PROP
+exit
+
+! --- 3. Keyring (Password VPN) ---
+crypto ikev2 keyring FORTI-KEY
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key KunciRahasiaVPN
+exit
+
+Langkah 3: Konfigurasi Authorization & Pool
+Menentukan IP yang akan didapat oleh user FortiClient.
+! --- 1. Pool IP untuk Client ---
+ip local pool VPN-POOL 192.168.80.1 192.168.80.50
+
+! --- 2. Authorization Policy ---
+crypto ikev2 authorization policy FORTI-POLICY
+ pool VPN-POOL
+exit
+
+! --- 3. Profile IKEv2 (Penyatu SEMUA aturan) ---
+crypto ikev2 profile FORTI-PROFILE
+ match identity remote any
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local FORTI-KEY
+ aaa authorization group psk list default FORTI-POLICY
+ virtual-template 1
+exit
+
+Langkah 4: Konfigurasi IPsec (Fase 2)
+Menentukan bagaimana data di dalam terowongan dibungkus.
+! --- 1. Transform Set ---
+crypto ipsec transform-set FORTI-TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+exit
+
+! --- 2. IPsec Profile ---
+crypto ipsec profile FORTI-VTI-PROFILE
+ set transform-set FORTI-TSET
+ set ikev2-profile FORTI-PROFILE
+exit
+
+Langkah 5: Interface Virtual (Pintu Masuk)
+Langkah inilah yang akan mengubah status VPN menjadi ON.
+interface Virtual-Template1 type tunnel
+ ip unnumbered GigabitEthernet8
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet8
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FORTI-VTI-PROFILE
+exit
+
+CEK
+show crypto isakmp status: Pastikan statusnya ON.
+show ip interface brief: Pastikan Virtual-Template1 sudah ada.
+write memory: Simpan konfigurasi agar tidak hilang saat mati lampu.
