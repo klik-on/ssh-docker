@@ -193,3 +193,105 @@ Langkah Verifikasi Setelah Paste:
 Untuk memastikan semuanya sudah masuk sesuai menu di atas, kamu bisa cek dengan perintah:
 show crypto ikev2 proposal
 show crypto ipsec transform-set
+
+
+### FRESH
+1. Bersihkan Konfigurasi Lama (Opsional tapi Disarankan)
+conf t
+no crypto ikev2 profile FORTI-PROFILE
+no crypto ikev2 keyring FORTI-KEY
+no crypto ikev2 proposal FORTI-PROP
+no interface Tunnel1
+
+2. Langkah-Langkah Konfigurasi FlexVPN Client
+! --- 1. PROPOSAL & POLICY (Fase 1) ---
+crypto ikev2 proposal FLEX-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+exit
+
+crypto ikev2 policy FLEX-POL
+ proposal FLEX-PROP
+exit
+
+! --- 2. KEYRING (Pre-shared Key KLHK) ---
+crypto ikev2 keyring FLEX-KEY
+ peer KLHK-GATEWAY
+  address 103.52.213.10
+  pre-shared-key Pusdatin@KLHK
+ exit
+exit
+
+! --- 3. KREDENSIAL USER (XAuth/EAP) ---
+crypto ikev2 client-authentication eap
+ user nicfi password nicfi$001#
+exit
+
+! --- 4. FLEXVPN PROFILE ---
+crypto ikev2 profile FLEX-PROFILE
+ match identity remote address 103.52.213.10 255.255.255.255
+ identity local email nicfi@klhk.go.id
+ authentication local eap-client
+ authentication remote pre-share
+ keyring local FLEX-KEY
+ ! Menghindari masalah timeout di belakang NAT
+ dpd 10 3 on-demand
+exit
+
+! --- 5. IPSEC TRANSFORM-SET & PROFILE (Fase 2) ---
+crypto ipsec transform-set FLEX-TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+exit
+
+crypto ipsec profile FLEX-IPSEC-PROF
+ set transform-set FLEX-TSET
+ set ikev2-profile FLEX-PROFILE
+ set pfs group14
+exit
+
+! --- 6. NAT TRAVERSAL (WAJIB UNTUK IP PRIVATE) ---
+crypto ipsec nat-transparency udp-encapsulation
+
+! --- 7. INTERFACE TUNNEL (VTI) ---
+interface Tunnel1
+ description VPN-TO-KLHK-FLEXVPN
+ ! Menggunakan IP interface fisik Gi8 agar tidak butuh IP baru
+ ip unnumbered GigabitEthernet8
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet8
+ tunnel destination 103.52.213.10
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FLEX-IPSEC-PROF
+exit
+
+! --- 8. ROUTING KE LAN KLHK ---
+ip route 172.16.2.0 255.255.255.0 Tunnel1
+ip route 172.16.3.0 255.255.255.0 Tunnel1
+
+! --- 9. NAT EXEMPTION (Agar trafik lokal tidak bentrok dengan VPN) ---
+ip access-list extended NAT-EXEMPT
+ 5 deny ip 192.168.70.0 0.0.0.255 172.16.2.0 0.0.0.255
+ 6 deny ip 192.168.70.0 0.0.0.255 172.16.3.0 0.0.0.255
+ 10 permit ip 192.168.70.0 0.0.0.255 any
+exit
+
+! Pasang kembali NAT di Gi8 dengan list yang baru
+ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
+
+do write memory
+
+3. Cara Memastikan Koneksi Berhasil
+Setelah semua perintah di atas dimasukkan, lakukan urutan pengecekan ini:
+    Pancing Koneksi:
+    Lakukan ping ke salah satu IP server KLHK:
+    ping 172.16.2.1 source 192.168.70.1 (ganti IP tujuan dengan server yang kamu tahu aktif).
+    Cek Status IKEv2:
+    show crypto ikev2 sa
+        READY: VPN sudah aktif dan terenkripsi.
+        IN-NEG: Sedang mencoba negosiasi. Tunggu sebentar.
+        Kosong: Router tidak bisa menghubungi gateway. Cek koneksi internet di Gi8.
+    Cek Status Interface:
+    show ip interface brief | include Tunnel1
+        Pastikan statusnya up/up.
