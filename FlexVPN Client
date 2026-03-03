@@ -15,7 +15,13 @@ interface Tunnel1
  tunnel protection ipsec profile FORTI-VTI-PROFILE
 exit
 
-Pastikan kamu sudah berada di dalam configure terminal.
+conf t
+crypto ikev2 profile FORTI-PROFILE
+ no virtual-template 1
+exit
+
+
+FRESH INSTALL Pastikan kamu sudah berada di dalam configure terminal.
 #####
 
 ! --- 1. KONFIGURASI NAT EXEMPTION ---
