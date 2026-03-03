@@ -167,3 +167,6 @@ Langkah Verifikasi Setelah Paste:
     Cek Status Terowongan: Jalankan show crypto ikev2 sa. Status harus READY. Jika masih kosong, coba pancing dengan ping 172.16.2.1.
     Cek Traffic: Jalankan show crypto ipsec sa. Lihat apakah nilai pada pkts encaps (paket terkirim) dan pkts decaps (paket diterima) bertambah.
     Cek Routing: Pastikan dari komputer di jaringan 192.168.70.0 sudah bisa melakukan ping/akses ke IP 172.16.2.x.
+Untuk memastikan semuanya sudah masuk sesuai menu di atas, kamu bisa cek dengan perintah:
+show crypto ikev2 proposal
+show crypto ipsec transform-set
