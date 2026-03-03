@@ -8,6 +8,7 @@ Perhatikan baris ini:
 Ini menunjukkan bahwa fitur VPN di router Anda saat ini sedang tidak aktif. Meskipun lisensinya ada, konfigurasinya belum dinyalakan atau belum lengkap.
 
 # Koneksi Internet (WAN)
+Analisis: Interface WAN kamu (Gi8) menerima IP Private (192.168.30.100), bukan IP Publik langsung.
 Log menunjukkan router Anda mendapatkan IP dari DHCP:
 *Feb 28 06:39:17.900: %DHCP-6-ADDRESS_ASSIGN: Interface GigabitEthernet8 assigned DHCP address 192.168.30.100
 Router Anda terhubung ke jaringan melalui GigabitEthernet8 dengan IP 192.168.30.100. Karena ini adalah IP lokal (private), ada satu hal penting:
