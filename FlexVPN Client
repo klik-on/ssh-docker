@@ -2,12 +2,11 @@ Berdasarkan instruksi profil FortiClient tersebut, ada satu detail yang sangat p
 Karena Fortinet menggunakan XAuth, kita harus menyesuaikan konfigurasi Cisco kamu agar berperilaku persis seperti FortiClient yang sedang melakukan login.
 Berikut adalah urutan perintah final yang sudah disesuaikan dengan data VPN KLHK:
 1. Update Keyring (Pre-shared Key)
-Masukkan kunci yang baru saja kamu berikan: Pusdatin@KLHK.
 conf t
 crypto ikev2 keyring FORTI-KEY
  peer FORTINET-KLHK
   address 103.52.213.10
-  pre-shared-key Pusdatin@KLHK
+  pre-shared-key ****_Pusdatin@KLHK
  exit
 exit
 
@@ -26,7 +25,7 @@ exit
 3. Konfigurasi Client Credentials
 Ini adalah bagian "Save Login" di mana username dan password disimpan.
 crypto ikev2 client-authentication eap
- user nicfi password nicfi$001#
+ user nicfi password ****_nicfi$001#
 exit
 
 4. Mengaktifkan Tunnel (VTI)
