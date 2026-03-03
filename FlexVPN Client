@@ -255,7 +255,7 @@ crypto ipsec nat-transparency udp-encapsulation
 
 ! --- 7. INTERFACE TUNNEL (VTI) ---
 interface Tunnel1
- description VPN-TO-KLHK-FLEXVPN
+ description VPN-FLEXVPN
  ! Menggunakan IP interface fisik Gi8 agar tidak butuh IP baru
  ip unnumbered GigabitEthernet8
  ip mtu 1400
