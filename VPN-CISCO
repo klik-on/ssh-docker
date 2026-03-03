@@ -149,7 +149,7 @@ crypto ikev2 authorization policy FORTI-POLICY
  dns 8.8.8.8 8.8.4.4
 exit
 
+# Tambahkan akses list untuk memberitahu user VPN jaringan mana saja yang harus lewat jalur VPN:
 access-list 101 permit ip 192.168.70.0 0.0.0.255 any
-
 crypto ikev2 authorization policy FORTI-POLICY
  route set access-list 101
