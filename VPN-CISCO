@@ -1,0 +1,155 @@
+# Log menunjukkan:
+*Jan 2 00:00:00.995: %IOS_LICENSE_IMAGE_APPLICATION-6-LICENSE_LEVEL: Module name = c800 Next reboot level = advipservices and License = advipservices
+Artinya, router Anda sudah menggunakan lisensi Advanced IP Services. Ini adalah syarat mutlak agar fitur kriptografi (VPN) bisa berjalan. Anda sudah punya "kunci" untuk menjalankan VPN
+
+# Masalah Utama: ISAKMP/VPN Masih Mati
+Perhatikan baris ini:
+*Feb 28 06:39:10.059: %CRYPTO-6-ISAKMP_ON_OFF: ISAKMP is OFF
+Ini menunjukkan bahwa fitur VPN di router Anda saat ini sedang tidak aktif. Meskipun lisensinya ada, konfigurasinya belum dinyalakan atau belum lengkap.
+
+# Koneksi Internet (WAN)
+Log menunjukkan router Anda mendapatkan IP dari DHCP:
+*Feb 28 06:39:17.900: %DHCP-6-ADDRESS_ASSIGN: Interface GigabitEthernet8 assigned DHCP address 192.168.30.100
+Router Anda terhubung ke jaringan melalui GigabitEthernet8 dengan IP 192.168.30.100. Karena ini adalah IP lokal (private), ada satu hal penting:
+   PENTING: Jika IP 192.168.30.100 berasal dari router lain (seperti modem provider), 
+            Anda harus melakukan Port Forwarding (UDP 500 & 4500) dari modem tersebut ke arah IP Cisco ini agar FortiClient dari luar bisa masuk.
+
+# Ini akan otomatis mengaktifkan ISAKMP/IKEv2 status menjadi ON
+configure terminal
+crypto ikev2 proposal PROPOSAL_FORTI
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+exit
+
+crypto ikev2 policy POLICY_FORTI
+ proposal PROPOSAL_FORTI
+exit
+
+# Cara Cek Kembali
+Setelah Anda memasukkan konfigurasi VPN, ketik perintah ini:
+show crypto isakmp status (atau lihat log lagi).
+Jika sudah tertulis %CRYPTO-6-ISAKMP_ON_OFF: ISAKMP is ON, berarti router sudah siap menunggu ketukan pintu dari FortiClient.
+
+
+SSH 192.168.70.1 
+user : admin
+port : 22
+
+abiyasa>enable
+Password:
+abiyasa#
+
+1. Masuk ke Mode Konfigurasi
+abiyasa#configure terminal
+Enter configuration commands, one per line.  End with CNTL/Z.
+abiyasa(config)#
+
+2. Masukkan Konfigurasi IKEv2 (Phase 1)
+ip local pool VPN-POOL 192.168.80.1 192.168.80.50
+
+crypto ikev2 proposal FORTI-PROP 
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+exit
+
+crypto ikev2 policy FORTI-POL
+ proposal FORTI-PROP
+exit
+
+crypto ikev2 keyring FORTI-KEY
+ peer ANY
+  address 0.0.0.0 0.0.0.0
+  pre-shared-key KunciRahasiaVPN
+exit
+
+
+Karena Anda sudah memasukkan ketiganya, statusnya sekarang sudah valid.
+
+Sekarang, Anda berada di dalam abiyasa(config-ikev2-keyring)#. Mari kita lanjutkan ke tahap berikutnya untuk membuat Authorization Policy dan Profile.
+
+Silakan masukkan baris perintah berikut:
+4. Lanjutkan ke Authorization Policy & Profile
+exit
+!
+crypto ikev2 authorization policy FORTI-AUTHOR
+ pool VPN-POOL
+ dns 8.8.8.8
+exit
+!
+crypto ikev2 profile FORTI-PROFILE
+ match identity remote address 0.0.0.0
+ identity local address 192.168.30.100
+ authentication remote pre-share
+ authentication local pre-share
+ keyring FORTI-KEY
+ aaa authorization group local list default FORTI-AUTHOR
+ virtual-template 1
+exit
+
+## perbaiki
+configure terminal
+crypto ikev2 profile FORTI-PROFILE
+ # Perbaikan baris keyring:
+ keyring local FORTI-KEY
+ 
+ # Perbaikan baris aaa authorization:
+ # Jika 'list default' ditolak, kita gunakan perintah langsung ke policy:
+ aaa authorization group local FORTI-AUTHOR
+exit
+
+
+abiyasa(config-if)#exit
+abiyasa(config)#crypto ikev2 authorization policy FORTI-POLICY
+abiyasa(config-ikev2-author-policy)#pool VPN-POOL
+abiyasa(config-ikev2-author-policy)#exit
+abiyasa(config)#crypto ikev2 profile FORTI-PROFILE
+abiyasa(config-ikev2-profile)#aaa authorization group psk list default FORTI-POLICY
+abiyasa(config-ikev2-profile)#
+abiyasa(config-ikev2-profile)# end
+abiyasa# write memory
+Building configuration...
+  [OK]
+abiyasa#show crypto ikev2 profile FORTI-PROFILE
+	 AAA group authorization:
+       psk: list default, username FORTI-POLICY
+
+abiyasa#show crypto ikev2 sa
+Jika belum ada yang konek, tabel ini akan kosong. Itu normal
+
+	   
+
+2. Cara Setting di FortiClient (Sisi Client)
+Parameter,Pengaturan
+Remote Gateway,192.168.30.100
+Authentication,Pre-Shared Key
+Pre-Shared Key,KunciRahasiaVPN
+IKE Version,2
+Phase 1 Proposal,AES256 - SHA256 - DH Group 14
+Phase 2 Proposal,"AES256 - SHA256 (PFS Enabled, DH Group 14)"
+
+
+abiyasa# debug crypto ikev2 error
+
+Silakan klik Connect sekarang. Pesan apa yang muncul di layar SSH Anda saat FortiClient mencoba melakukan negosiasi? 
+Jika log muncul terlalu banyak dan cepat, Anda bisa mematikannya nanti dengan undebug all).
+
+### Perbaikan NAT (Penting!)
+ip access-list extended NAT-EXEMPT
+ deny ip 192.168.70.0 0.0.0.255 192.168.80.0 0.0.0.255
+ permit ip 192.168.70.0 0.0.0.255 any
+exit
+
+no ip nat inside source list 1 interface GigabitEthernet8 overload
+ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
+
+##
+crypto ikev2 authorization policy FORTI-POLICY
+ dns 8.8.8.8 8.8.4.4
+exit
+
+access-list 101 permit ip 192.168.70.0 0.0.0.255 any
+
+crypto ikev2 authorization policy FORTI-POLICY
+ route set access-list 101
