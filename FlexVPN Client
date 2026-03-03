@@ -1,210 +1,31 @@
-Hapus Virtual-Template (jika sudah terlanjur dibuat) dan gunakan Interface Tunnel1:
-no interface Virtual-Template1
+copy running-config flash:config-backup-maret2026.cfg
+dir flash:
 
-interface Tunnel1
- description VPN-KLHK-CLIENT-INITIATOR
- ! Menggunakan IP yang sama dengan fisik agar hemat IP
- ip unnumbered GigabitEthernet8
- ip mtu 1400
- ip tcp adjust-mss 1360
- ! Sumber koneksi (IP Private kamu 192.168.30.100)
- tunnel source GigabitEthernet8
- ! Tujuan koneksi (IP Publik KLHK)
- tunnel destination 103.52.213.10
- tunnel mode ipsec ipv4
- tunnel protection ipsec profile FORTI-VTI-PROFILE
-exit
+Skenario 1: Restore ke Running Config (Langsung Aktif)
+copy flash:config-backup-maret2026.cfg running-config
+
+Catatan Penting: Perintah ini bersifat "merge" (menggabungkan). Jika di router saat ini ada konfigurasi yang tidak ada di file backup, konfigurasi tersebut mungkin tetap tersisa.
+
+Skenario 2: Restore Total (Paling Bersih)
+copy flash:config-backup-maret2026.cfg startup-config
+reload
+more flash:config-backup-maret2026.cfg
+
 
 conf t
-crypto ikev2 profile FORTI-PROFILE
- no virtual-template 1
-exit
 
-
-FRESH INSTALL Pastikan kamu sudah berada di dalam configure terminal.
-#####
-
-! --- 1. KONFIGURASI NAT EXEMPTION ---
-! Mengecualikan trafik ke KLHK agar tidak terkena NAT
+! --- 1. NAT EXEMPTION (Prioritas Utama agar IP Lokal tidak berubah) ---
 ip access-list extended NAT-EXEMPT
- 5 deny ip 192.168.70.0 0.0.0.255 172.16.2.0 0.0.0.255
- 6 deny ip 192.168.70.0 0.0.0.255 172.16.3.0 0.0.0.255
- 10 permit ip 192.168.70.0 0.0.0.255 any
+ 10 deny ip 192.168.70.0 0.0.0.255 172.16.2.0 0.0.0.255
+ 20 deny ip 192.168.70.0 0.0.0.255 172.16.3.0 0.0.0.255
+ 30 permit ip 192.168.70.0 0.0.0.255 any
 exit
 
-! Terapkan NAT di interface luar (Gi8)
+! Pasang NAT pada interface luar
+no ip nat inside source list 1 interface GigabitEthernet8 overload
 ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
 
-! --- 2. KONFIGURASI IKEv2 (FASE 1) ---
-crypto ikev2 proposal FORTI-PROP
- encryption aes-cbc-256
- integrity sha256
- group 14
-exit
-
-crypto ikev2 policy FORTI-POL
- proposal FORTI-PROP
-exit
-
-crypto ikev2 keyring FORTI-KEY
- peer FORTINET-KLHK
-  address 103.52.213.10
-  pre-shared-key Pusdatin@KLHK
- exit
-exit
-
-! --- 3. KONFIGURASI KREDENSIAL USER (SAVE LOGIN) ---
-crypto ikev2 client-authentication eap
- user nicfi password nicfi$001#
-exit
-
-! --- 4. KONFIGURASI IKEv2 PROFILE ---
-crypto ikev2 profile FORTI-PROFILE
- match identity remote address 103.52.213.10 255.255.255.255
- identity local email nicfi@klhk.go.id
- authentication local eap-client
- authentication remote pre-share
- keyring local FORTI-KEY
- dpd 10 3 on-demand
-exit
-
-! --- 5. KONFIGURASI IPsec (FASE 2) ---
-crypto ipsec transform-set FORTI-TSET esp-aes 256 esp-sha256-hmac
- mode tunnel
-exit
-
-crypto ipsec profile FORTI-VTI-PROFILE
- set transform-set FORTI-TSET
- set ikev2-profile FORTI-PROFILE
- set pfs group14
-exit
-
-! --- 6. KONFIGURASI INTERFACE TUNNEL & NAT-T ---
-crypto ipsec nat-transparency udp-encapsulation
-
-interface Tunnel1
- description VPN-KLHK-PUSDATIN
- ip unnumbered GigabitEthernet8
- ip mtu 1400
- ip tcp adjust-mss 1360
- tunnel source GigabitEthernet8
- tunnel destination 103.52.213.10
- tunnel mode ipsec ipv4
- tunnel protection ipsec profile FORTI-VTI-PROFILE
-exit
-
-! --- 7. KONFIGURASI ROUTING KE ARAH KLHK ---
-ip route 172.16.2.0 255.255.255.0 Tunnel1
-ip route 172.16.3.0 255.255.255.0 Tunnel1
-
-! --- 8. SIMPAN KONFIGURASI ---
-do write memory
-
-
-#####
- Gemini said
-
-Berikut adalah rangkuman seluruh perintah konfigurasi dari awal sampai akhir untuk Router Abiyasa. Kamu bisa langsung copy-paste perintah ini ke terminal (mode Global Configuration).
-
-Pastikan kamu sudah berada di dalam configure terminal.
-Bash
-
-! --- 1. KONFIGURASI NAT EXEMPTION ---
-! Mengecualikan trafik ke KLHK agar tidak terkena NAT
-ip access-list extended NAT-EXEMPT
- 5 deny ip 192.168.70.0 0.0.0.255 172.16.2.0 0.0.0.255
- 6 deny ip 192.168.70.0 0.0.0.255 172.16.3.0 0.0.0.255
- 10 permit ip 192.168.70.0 0.0.0.255 any
-exit
-
-! Terapkan NAT di interface luar (Gi8)
-ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
-
-! --- 2. KONFIGURASI IKEv2 (FASE 1) ---
-crypto ikev2 proposal FORTI-PROP
- encryption aes-cbc-256
- integrity sha256
- group 14
-exit
-
-crypto ikev2 policy FORTI-POL
- proposal FORTI-PROP
-exit
-
-crypto ikev2 keyring FORTI-KEY
- peer FORTINET-KLHK
-  address 103.52.213.10
-  pre-shared-key Pusdatin@KLHK
- exit
-exit
-
-! --- 3. KONFIGURASI KREDENSIAL USER (SAVE LOGIN) ---
-crypto ikev2 client-authentication eap
- user nicfi password nicfi$001#
-exit
-
-! --- 4. KONFIGURASI IKEv2 PROFILE ---
-crypto ikev2 profile FORTI-PROFILE
- match identity remote address 103.52.213.10 255.255.255.255
- identity local email nicfi@klhk.go.id
- authentication local eap-client
- authentication remote pre-share
- keyring local FORTI-KEY
- dpd 10 3 on-demand
-exit
-
-! --- 5. KONFIGURASI IPsec (FASE 2) ---
-crypto ipsec transform-set FORTI-TSET esp-aes 256 esp-sha256-hmac
- mode tunnel
-exit
-
-crypto ipsec profile FORTI-VTI-PROFILE
- set transform-set FORTI-TSET
- set ikev2-profile FORTI-PROFILE
- set pfs group14
-exit
-
-! --- 6. KONFIGURASI INTERFACE TUNNEL & NAT-T ---
-crypto ipsec nat-transparency udp-encapsulation
-
-interface Tunnel1
- description VPN-KLHK-PUSDATIN
- ip unnumbered GigabitEthernet8
- ip mtu 1400
- ip tcp adjust-mss 1360
- tunnel source GigabitEthernet8
- tunnel destination 103.52.213.10
- tunnel mode ipsec ipv4
- tunnel protection ipsec profile FORTI-VTI-PROFILE
-exit
-
-! --- 7. KONFIGURASI ROUTING KE ARAH KLHK ---
-ip route 172.16.2.0 255.255.255.0 Tunnel1
-ip route 172.16.3.0 255.255.255.0 Tunnel1
-
-! --- 8. SIMPAN KONFIGURASI ---
-do write memory
-
-####
-Langkah Verifikasi Setelah Paste:
-    Cek Status Terowongan: Jalankan show crypto ikev2 sa. Status harus READY. Jika masih kosong, coba pancing dengan ping 172.16.2.1.
-    Cek Traffic: Jalankan show crypto ipsec sa. Lihat apakah nilai pada pkts encaps (paket terkirim) dan pkts decaps (paket diterima) bertambah.
-    Cek Routing: Pastikan dari komputer di jaringan 192.168.70.0 sudah bisa melakukan ping/akses ke IP 172.16.2.x.
-Untuk memastikan semuanya sudah masuk sesuai menu di atas, kamu bisa cek dengan perintah:
-show crypto ikev2 proposal
-show crypto ipsec transform-set
-
-
-### FRESH
-1. Bersihkan Konfigurasi Lama (Opsional tapi Disarankan)
-conf t
-no crypto ikev2 profile FORTI-PROFILE
-no crypto ikev2 keyring FORTI-KEY
-no crypto ikev2 proposal FORTI-PROP
-no interface Tunnel1
-
-2. Langkah-Langkah Konfigurasi FlexVPN Client
-! --- 1. PROPOSAL & POLICY (Fase 1) ---
+! --- 2. IKEv2 PROPOSAL & POLICY (Fase 1) ---
 crypto ikev2 proposal FLEX-PROP
  encryption aes-cbc-256
  integrity sha256
@@ -215,31 +36,28 @@ crypto ikev2 policy FLEX-POL
  proposal FLEX-PROP
 exit
 
-! --- 2. KEYRING (Pre-shared Key KLHK) ---
 crypto ikev2 keyring FLEX-KEY
  peer KLHK-GATEWAY
   address 103.52.213.10
-  pre-shared-key Pusdatin@KLHK
+  pre-shared-key Pus*******
  exit
 exit
 
-! --- 3. KREDENSIAL USER (XAuth/EAP) ---
-crypto ikev2 client-authentication eap
- user nicfi password nicfi$001#
-exit
+! --- 3. IKEv2 PROFILE (Identitas & Autentikasi) ---
+! Pastikan username lokal sudah ada jika menggunakan aaa
+username nicfi privilege 15 secret nic******
 
-! --- 4. FLEXVPN PROFILE ---
 crypto ikev2 profile FLEX-PROFILE
  match identity remote address 103.52.213.10 255.255.255.255
  identity local email nicfi@klhk.go.id
- authentication local eap-client
+ authentication local pre-share
  authentication remote pre-share
  keyring local FLEX-KEY
- ! Menghindari masalah timeout di belakang NAT
+ aaa authorization group psk list default default
  dpd 10 3 on-demand
 exit
 
-! --- 5. IPSEC TRANSFORM-SET & PROFILE (Fase 2) ---
+! --- 4. IPSEC TRANSFORM-SET & PROFILE (Fase 2) ---
 crypto ipsec transform-set FLEX-TSET esp-aes 256 esp-sha256-hmac
  mode tunnel
 exit
@@ -250,48 +68,23 @@ crypto ipsec profile FLEX-IPSEC-PROF
  set pfs group14
 exit
 
-! --- 6. NAT TRAVERSAL (WAJIB UNTUK IP PRIVATE) ---
-crypto ipsec nat-transparency udp-encapsulation
-
-! --- 7. INTERFACE TUNNEL (VTI) ---
+! --- 5. INTERFACE TUNNEL ---
 interface Tunnel1
- description VPN-FLEXVPN
- ! Menggunakan IP interface fisik Gi8 agar tidak butuh IP baru
- ip unnumbered GigabitEthernet8
+ description VPN-KLHK-PUSDATIN
+ ! Menggunakan IP dari Vlan1 agar source ping 192.168.70.1 valid
+ ip unnumbered Vlan1 
  ip mtu 1400
  ip tcp adjust-mss 1360
  tunnel source GigabitEthernet8
  tunnel destination 103.52.213.10
  tunnel mode ipsec ipv4
  tunnel protection ipsec profile FLEX-IPSEC-PROF
+ no shutdown
 exit
 
-! --- 8. ROUTING KE LAN KLHK ---
+! --- 6. STATIC ROUTING ---
 ip route 172.16.2.0 255.255.255.0 Tunnel1
 ip route 172.16.3.0 255.255.255.0 Tunnel1
 
-! --- 9. NAT EXEMPTION (Agar trafik lokal tidak bentrok dengan VPN) ---
-ip access-list extended NAT-EXEMPT
- 5 deny ip 192.168.70.0 0.0.0.255 172.16.2.0 0.0.0.255
- 6 deny ip 192.168.70.0 0.0.0.255 172.16.3.0 0.0.0.255
- 10 permit ip 192.168.70.0 0.0.0.255 any
-exit
-
-! Pasang kembali NAT di Gi8 dengan list yang baru
-ip nat inside source list NAT-EXEMPT interface GigabitEthernet8 overload
-
-do write memory
-
-3. Cara Memastikan Koneksi Berhasil
-Setelah semua perintah di atas dimasukkan, lakukan urutan pengecekan ini:
-    Pancing Koneksi:
-    Lakukan ping ke salah satu IP server KLHK:
-    ping 172.16.2.1 source 192.168.70.1 (ganti IP tujuan dengan server yang kamu tahu aktif).
-    Cek Status IKEv2:
-    show crypto ikev2 sa
-        READY: VPN sudah aktif dan terenkripsi.
-        IN-NEG: Sedang mencoba negosiasi. Tunggu sebentar.
-        Kosong: Router tidak bisa menghubungi gateway. Cek koneksi internet di Gi8.
-    Cek Status Interface:
-    show ip interface brief | include Tunnel1
-        Pastikan statusnya up/up.
+end
+write memory
