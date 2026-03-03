@@ -1,0 +1,71 @@
+Karena Cisco kamu tidak punya IP Publik dan tidak bisa setting modem, menjadikannya sebagai Initiator adalah keputusan cerdas, karena router kamu yang akan "mengetuk pintu" Fortinet terlebih dahulu.
+
+Berikut adalah panduan mencocokkan pengaturan FortiClient yang kamu kirim ke dalam bahasa perintah (CLI) Cisco:
+1. Fase 1 (IKE Proposal)
+
+Di FortiClient kamu memilih IKE Version 2. Sesuaikan di Cisco:
+Bash
+
+crypto ikev2 proposal FORTI-PROP
+ encryption aes-256
+ integrity sha256
+ group 14
+exit
+
+crypto ikev2 policy FORTI-POL
+ proposal FORTI-PROP
+exit
+
+2. Keyring (Pre-shared Key)
+
+Pastikan address di sini adalah IP Publik Fortinet pusat.
+Bash
+
+crypto ikev2 keyring FORTI-KEY
+ peer FORTINET-PUSAT
+  address [IP_PUBLIK_FORTINET]
+  pre-shared-key KunciRahasiaVPN
+exit
+
+3. Fase 2 (IPsec Proposal)
+
+Di FortiClient kamu memilih AES256, SHA256, dan PFS Group 14.
+Bash
+
+crypto ipsec transform-set FORTI-TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+exit
+
+crypto ipsec profile FORTI-VTI-PROFILE
+ set transform-set FORTI-TSET
+ set ikev2-profile FORTI-PROFILE
+ set pfs group14
+exit
+
+4. IKEv2 Profile (Pengaturan Koneksi)
+
+Karena Cisco yang menghubungi Fortinet, kita harus mencocokkan identitasnya.
+Bash
+
+crypto ikev2 profile FORTI-PROFILE
+ match address local GigabitEthernet8
+ match identity remote address [IP_PUBLIK_FORTINET]
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local FORTI-KEY
+exit
+
+5. Interface Tunnel (VTI)
+
+Ini adalah "kabel gaib" yang menghubungkan kamu ke Fortinet.
+Bash
+
+interface Tunnel1
+ ip address 192.168.80.2 255.255.255.0  # IP Tunnel (disesuaikan)
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ tunnel source GigabitEthernet8
+ tunnel destination [IP_PUBLIK_FORTINET]
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FORTI-VTI-PROFILE
+exit
