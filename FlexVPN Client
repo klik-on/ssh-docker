@@ -1,91 +1,55 @@
-1. Konfigurasi Kredensial (Username & Password)
-Kita masukkan akun nicfi ke dalam database client Cisco.
+Berdasarkan instruksi profil FortiClient tersebut, ada satu detail yang sangat penting: Pusdatin@KLHK adalah Pre-shared Key-nya.
+Karena Fortinet menggunakan XAuth, kita harus menyesuaikan konfigurasi Cisco kamu agar berperilaku persis seperti FortiClient yang sedang melakukan login.
+Berikut adalah urutan perintah final yang sudah disesuaikan dengan data VPN KLHK:
+1. Update Keyring (Pre-shared Key)
+Masukkan kunci yang baru saja kamu berikan: Pusdatin@KLHK.
 conf t
+crypto ikev2 keyring FORTI-KEY
+ peer FORTINET-KLHK
+  address 103.52.213.10
+  pre-shared-key Pusdatin@KLHK
+ exit
+exit
+
+2. Update IKEv2 Profile (XAuth/EAP Configuration)
+Kita sesuaikan agar Cisco mengirimkan username nicfi saat diminta oleh gateway KLHK.
+crypto ikev2 profile FORTI-PROFILE
+ match identity remote address 103.52.213.10 255.255.255.255
+ identity local email nicfi@klhk.go.id
+ authentication local eap-client
+ authentication remote pre-share
+ keyring local FORTI-KEY
+ ! --- Penting untuk koneksi di belakang NAT ---
+ dpd 10 3 on-demand
+exit
+
+3. Konfigurasi Client Credentials
+Ini adalah bagian "Save Login" di mana username dan password disimpan.
 crypto ikev2 client-authentication eap
  user nicfi password nicfi$001#
 exit
 
-2. Konfigurasi IKEv2 Profile (Otak Koneksi)
-crypto ikev2 profile FORTI-PROFILE
- match identity remote address 103.52.213.10 255.255.255.255
- identity local email nicfi@vpn.com  # Identitas lokal formal
- authentication local eap-client     # Cisco bertindak sebagai client
- authentication remote pre-share     # Fortinet pakai PSK
- keyring local FORTI-KEY
- dpd 10 3 on-demand
-exit
-
-3. Konfigurasi Interface Tunnel
-Interface ini akan mencoba menghubungi Fortinet secara otomatis.
+4. Mengaktifkan Tunnel (VTI)
+Pastikan interface tunnel kamu mengarah ke gateway KLHK.
 interface Tunnel1
- description LINK-TO-FORTINET-HQ
+ description VPN-KLHK
  ip unnumbered GigabitEthernet8
- ip mtu 1400
- ip tcp adjust-mss 1360
  tunnel source GigabitEthernet8
  tunnel destination 103.52.213.10
  tunnel mode ipsec ipv4
  tunnel protection ipsec profile FORTI-VTI-PROFILE
 exit
 
-4. Langkah Krusial: NAT-Traversal
-crypto ipsec nat-transparency udp-encapsulation
+5. Verifikasi & Cara Mengetes
+Karena kamu tidak bisa setting modem ISP, setelah memasukkan konfigurasi ini, lakukan langkah berikut:
+    Trigger Koneksi: Lakukan ping ke gateway KLHK agar Cisco mulai "mengetuk pintu".
+    ping 103.52.213.10
 
- Gemini said
-
-Siap, data sudah lengkap. Sekarang kita akan merakit semuanya menjadi satu konfigurasi utuh. Karena Cisco kamu akan bertindak sebagai Initiator (Client) yang membawa Username/Password ke Fortinet, kita menggunakan metode FlexVPN Client.
-
-Berikut adalah urutan perintah yang harus kamu masukkan ke Router Abiyasa:
-1. Konfigurasi Kredensial (Username & Password)
-
-Kita masukkan akun nicfi ke dalam database client Cisco.
-Bash
-
-conf t
-crypto ikev2 client-authentication eap
- user nicfi password nicfi$001#
-exit
-
-2. Konfigurasi IKEv2 Profile (Otak Koneksi)
-
-Di sini kita gabungkan Pre-shared Key (Phase 1) dengan autentikasi User (EAP).
-Bash
-
-crypto ikev2 profile FORTI-PROFILE
- match identity remote address 103.52.213.10 255.255.255.255
- identity local email nicfi@vpn.com  # Identitas lokal formal
- authentication local eap-client     # Cisco bertindak sebagai client
- authentication remote pre-share     # Fortinet pakai PSK
- keyring local FORTI-KEY
- dpd 10 3 on-demand
-exit
-
-3. Konfigurasi Interface Tunnel
-
-Interface ini akan mencoba menghubungi Fortinet secara otomatis.
-Bash
-
-interface Tunnel1
- description LINK-TO-FORTINET-HQ
- ip unnumbered GigabitEthernet8
- ip mtu 1400
- ip tcp adjust-mss 1360
- tunnel source GigabitEthernet8
- tunnel destination 103.52.213.10
- tunnel mode ipsec ipv4
- tunnel protection ipsec profile FORTI-VTI-PROFILE
-exit
-
-4. Langkah Krusial: NAT-Traversal
-Karena kamu berada di belakang modem ISP tanpa akses setting, perintah ini adalah WAJIB agar paket tidak diblokir modem.
-crypto ipsec nat-transparency udp-encapsulation
-
-5. Cara Mengetes (Sangat Penting)
-VPN jenis ini biasanya tidak akan menyala (UP) sebelum ada trafik yang lewat.
-    Coba lakukan ping ke IP Gateway Fortinet: ping 103.52.213.10
-    Cek status koneksi:
+    Cek Status IKEv2:
     show crypto ikev2 sa
-Analisis Hasil:
-    Status READY: Selamat! VPN sudah tersambung.
-    Status IN-NEG: Sedang proses salaman, tunggu 10 detik.
-    Status Kosong: Cisco tidak bisa mencapai Fortinet. Cek apakah internet di GigabitEthernet8 jalan.
+
+       Jika statusnya READY, berarti kamu sudah berhasil "masuk" ke jaringan KLHK.
+       Jika statusnya IN-NEG atau FAIL, kemungkinan besar karena modem ISP kamu memblokir port VPN.
+Tips Tambahan (Routing)
+Biasanya setelah VPN ini UP, kamu perlu tahu IP server di KLHK yang ingin kamu akses (misal: 10.x.x.x). Jangan lupa tambahkan rute statis agar trafiknya lewat VPN:
+ip route [IP_SERVER_KLHK] [SUBNET_MASK] Tunnel1
