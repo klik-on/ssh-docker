@@ -1,3 +1,20 @@
+Hapus Virtual-Template (jika sudah terlanjur dibuat) dan gunakan Interface Tunnel1:
+no interface Virtual-Template1
+
+interface Tunnel1
+ description VPN-KLHK-CLIENT-INITIATOR
+ ! Menggunakan IP yang sama dengan fisik agar hemat IP
+ ip unnumbered GigabitEthernet8
+ ip mtu 1400
+ ip tcp adjust-mss 1360
+ ! Sumber koneksi (IP Private kamu 192.168.30.100)
+ tunnel source GigabitEthernet8
+ ! Tujuan koneksi (IP Publik KLHK)
+ tunnel destination 103.52.213.10
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile FORTI-VTI-PROFILE
+exit
+
 Pastikan kamu sudah berada di dalam configure terminal.
 #####
 
