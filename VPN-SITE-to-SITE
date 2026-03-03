@@ -69,3 +69,15 @@ interface Tunnel1
  tunnel mode ipsec ipv4
  tunnel protection ipsec profile FORTI-VTI-PROFILE
 exit
+
+
+Hal Penting yang Harus Diperhatikan:
+
+    NAT Traversal: Karena Cisco kamu ada di belakang modem, pastikan opsi NAT Traversal di Fortinet dan Cisco sudah aktif. Di Cisco biasanya otomatis, tapi bisa dipastikan dengan:
+    crypto ipsec nat-transparency udp-encapsulation
+
+    Routing: Agar jaringan di bawah Cisco bisa ngobrol ke Fortinet, kamu butuh rute statis:
+    ip route 192.168.10.0 255.255.255.0 Tunnel1 (Asumsi 10.0 adalah network di belakang Fortinet).
+
+    Keepalive: Agar tunnel tidak mati karena modem ISP memutus koneksi idle, tambahkan ini di bawah interface Tunnel1:
+    tunnel keepalive 10 3
