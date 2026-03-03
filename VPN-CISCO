@@ -265,3 +265,13 @@ CEK
 show crypto isakmp status: Pastikan statusnya ON.
 show ip interface brief: Pastikan Virtual-Template1 sudah ada.
 write memory: Simpan konfigurasi agar tidak hilang saat mati lampu.
+
+Tabel Parameter FortiClient (Koreksi)
+Parameter,Pengaturan (Koreksi),Keterangan
+Remote Gateway,IP Publik Modem,PENTING: Jangan masukkan 192.168.30.100 jika kamu konek dari luar kantor (internet). Masukkan IP Publik yang didapat dari ISP.
+Authentication,Pre-Shared Key,Sudah benar.
+Pre-Shared Key,KunciRahasiaVPN,Harus sama persis dengan yang di crypto ikev2 keyring.
+IKE Version,2,Sesuai dengan konfigurasi crypto ikev2.
+Phase 1 Proposal,AES256 - SHA256 - Group 14,Sesuai dengan crypto ikev2 proposal.
+Phase 2 Proposal,AES256 - SHA256,Sesuai dengan crypto ipsec transform-set.
+Local ID,(Kosongkan/Optional),Biasanya tidak perlu diisi kecuali ditentukan di Profile.
